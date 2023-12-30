@@ -1,6 +1,6 @@
 //
 //  ChatQuery.swift
-//  
+//
 //
 //  Created by Sergii Kryvoblotskyi on 02/04/2023.
 //
@@ -11,9 +11,9 @@ import Foundation
 public struct ResponseFormat: Codable, Equatable {
     public static let jsonObject = ResponseFormat(type: .jsonObject)
     public static let text = ResponseFormat(type: .text)
-    
+
     public let type: Self.ResponseFormatType
-    
+
     public enum ResponseFormatType: String, Codable, Equatable {
         case jsonObject = "json_object"
         case text
@@ -21,30 +21,71 @@ public struct ResponseFormat: Codable, Equatable {
 }
 
 public struct Chat: Codable, Equatable {
+    public enum Part: Codable, Equatable {
+        case text(String)
+        case image_url(String)
+
+        public enum CodingKeys: CodingKey {
+            case text
+            case image_url
+            case type
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            switch self {
+            case let .text(text):
+                try container.encode("text", forKey: .type)
+                try container.encode(text, forKey: .text)
+            case let .image_url(image_url):
+                try container.encode("image_url", forKey: .type)
+                try container.encode(["url": image_url], forKey: .image_url)
+            }
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: Chat.Part.CodingKeys.self)
+            let type = try container.decode(String.self, forKey: .type)
+            if type == "text" {
+                let text = try container.decode(String.self, forKey: .text)
+                self = .text(text)
+            } else {
+                let image_url = try container.decode([String: String].self, forKey: .image_url)
+                if let url = image_url["url"] {
+                    self = .image_url(url)
+                } else {
+                    throw NSError(domain: "Openai Part Decode", code: -1)
+                }
+            }
+        }
+    }
+
     public let role: Role
     /// The contents of the message. `content` is required for all messages except assistant messages with function calls.
     public let content: String?
+    public let parts: [Part]?
     /// The name of the author of this message. `name` is required if role is `function`, and it should be the name of the function whose response is in the `content`. May contain a-z, A-Z, 0-9, and underscores, with a maximum length of 64 characters.
     public let name: String?
     public let functionCall: ChatFunctionCall?
-    
+
     public enum Role: String, Codable, Equatable {
         case system
         case assistant
         case user
         case function
     }
-    
+
     enum CodingKeys: String, CodingKey {
         case role
         case content
         case name
         case functionCall = "function_call"
     }
-    
-    public init(role: Role, content: String? = nil, name: String? = nil, functionCall: ChatFunctionCall? = nil) {
+
+    public init(role: Role, content: String? = nil, parts: [Part]? = nil, name: String? = nil, functionCall: ChatFunctionCall? = nil) {
         self.role = role
         self.content = content
+        self.parts = parts
         self.name = name
         self.functionCall = functionCall
     }
@@ -65,7 +106,37 @@ public struct Chat: Codable, Equatable {
         // See https://openai.com/blog/function-calling-and-other-api-updates
         if content != nil || (role == .assistant && functionCall != nil) {
             try container.encode(content, forKey: .content)
+        } else if parts != nil && role == .user {
+            // https://platform.openai.com/docs/api-reference/chat/create
+            // noly user message support parts
+            try container.encode(parts, forKey: .content)
         }
+    }
+
+    public init(from decoder: Decoder) throws {
+        var container = try decoder.container(keyedBy: CodingKeys.self)
+        role = try container.decode(Role.self, forKey: .role)
+        if container.contains(.name) {
+            name = try container.decode(String.self, forKey: .name)
+        } else {
+            name = nil
+        }
+        if container.contains(.functionCall) {
+            functionCall = try container.decode(ChatFunctionCall.self, forKey: .functionCall)
+        } else {
+            functionCall = nil
+        }
+        var content1: String? = nil
+        var parts1: [Part]? = nil
+        if container.contains(.content) {
+            if let text = try? container.decode(String.self, forKey: .content) {
+                content1 = text
+            } else if let parts = try? container.decode([Part].self, forKey: .content) {
+                parts1 = parts
+            }
+        }
+        parts = parts1
+        content = content1
     }
 }
 
@@ -81,7 +152,6 @@ public struct ChatFunctionCall: Codable, Equatable {
     }
 }
 
-
 /// See the [guide](/docs/guides/gpt/function-calling) for examples, and the [JSON Schema reference](https://json-schema.org/understanding-json-schema/) for documentation about the format.
 public struct JSONSchema: Codable, Equatable {
     public let type: JSONType
@@ -93,13 +163,13 @@ public struct JSONSchema: Codable, Equatable {
     public let multipleOf: Int?
     public let minimum: Int?
     public let maximum: Int?
-    
+
     private enum CodingKeys: String, CodingKey {
         case type, properties, required, pattern, const
         case enumValues = "enum"
         case multipleOf, minimum, maximum
     }
-    
+
     public struct Property: Codable, Equatable {
         public let type: JSONType
         public let description: String?
@@ -122,7 +192,7 @@ public struct JSONSchema: Codable, Equatable {
             case multipleOf, minimum, maximum
             case minItems, maxItems, uniqueItems
         }
-        
+
         public init(type: JSONType, description: String? = nil, format: String? = nil, items: Items? = nil, required: [String]? = nil, pattern: String? = nil, const: String? = nil, enumValues: [String]? = nil, multipleOf: Int? = nil, minimum: Double? = nil, maximum: Double? = nil, minItems: Int? = nil, maxItems: Int? = nil, uniqueItems: Bool? = nil) {
             self.type = type
             self.description = description
@@ -142,13 +212,13 @@ public struct JSONSchema: Codable, Equatable {
     }
 
     public enum JSONType: String, Codable {
-        case integer = "integer"
-        case string = "string"
-        case boolean = "boolean"
-        case array = "array"
-        case object = "object"
-        case number = "number"
-        case `null` = "null"
+        case integer
+        case string
+        case boolean
+        case array
+        case object
+        case number
+        case null
     }
 
     public struct Items: Codable, Equatable {
@@ -169,8 +239,8 @@ public struct JSONSchema: Codable, Equatable {
             case enumValues = "enum"
             case multipleOf, minimum, maximum, minItems, maxItems, uniqueItems
         }
-        
-        public init(type: JSONType, properties: [String : Property]? = nil, pattern: String? = nil, const: String? = nil, enumValues: [String]? = nil, multipleOf: Int? = nil, minimum: Double? = nil, maximum: Double? = nil, minItems: Int? = nil, maxItems: Int? = nil, uniqueItems: Bool? = nil) {
+
+        public init(type: JSONType, properties: [String: Property]? = nil, pattern: String? = nil, const: String? = nil, enumValues: [String]? = nil, multipleOf: Int? = nil, minimum: Double? = nil, maximum: Double? = nil, minItems: Int? = nil, maxItems: Int? = nil, uniqueItems: Bool? = nil) {
             self.type = type
             self.properties = properties
             self.pattern = pattern
@@ -184,8 +254,8 @@ public struct JSONSchema: Codable, Equatable {
             self.uniqueItems = uniqueItems
         }
     }
-    
-    public init(type: JSONType, properties: [String : Property]? = nil, required: [String]? = nil, pattern: String? = nil, const: String? = nil, enumValues: [String]? = nil, multipleOf: Int? = nil, minimum: Int? = nil, maximum: Int? = nil) {
+
+    public init(type: JSONType, properties: [String: Property]? = nil, required: [String]? = nil, pattern: String? = nil, const: String? = nil, enumValues: [String]? = nil, multipleOf: Int? = nil, minimum: Int? = nil, maximum: Int? = nil) {
         self.type = type
         self.properties = properties
         self.required = required
@@ -201,17 +271,17 @@ public struct JSONSchema: Codable, Equatable {
 public struct ChatFunctionDeclaration: Codable, Equatable {
     /// The name of the function to be called. Must be a-z, A-Z, 0-9, or contain underscores and dashes, with a maximum length of 64.
     public let name: String
-    
+
     /// The description of what the function does.
     public let description: String
-    
+
     /// The parameters the functions accepts, described as a JSON Schema object.
     public let parameters: JSONSchema
-  
+
     public init(name: String, description: String, parameters: JSONSchema) {
-      self.name = name
-      self.description = description
-      self.parameters = parameters
+        self.name = name
+        self.description = description
+        self.parameters = parameters
     }
 }
 
@@ -248,23 +318,23 @@ public struct ChatQuery: Equatable, Codable, Streamable {
     /// Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.
     public let frequencyPenalty: Double?
     /// Modify the likelihood of specified tokens appearing in the completion.
-    public let logitBias: [String:Int]?
+    public let logitBias: [String: Int]?
     /// A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse.
     public let user: String?
-    
+
     var stream: Bool = false
 
     public enum FunctionCall: Codable, Equatable {
         case none
         case auto
         case function(String)
-        
+
         enum CodingKeys: String, CodingKey {
-            case none = "none"
-            case auto = "auto"
+            case none
+            case auto
             case function = "name"
         }
-        
+
         public func encode(to encoder: Encoder) throws {
             switch self {
             case .none:
@@ -273,13 +343,13 @@ public struct ChatQuery: Equatable, Codable, Streamable {
             case .auto:
                 var container = encoder.singleValueContainer()
                 try container.encode(CodingKeys.auto.rawValue)
-            case .function(let name):
+            case let .function(name):
                 var container = encoder.container(keyedBy: CodingKeys.self)
                 try container.encode(name, forKey: .function)
             }
         }
     }
-    
+
     enum CodingKeys: String, CodingKey {
         case model
         case messages
@@ -297,8 +367,8 @@ public struct ChatQuery: Equatable, Codable, Streamable {
         case user
         case responseFormat = "response_format"
     }
-    
-    public init(model: Model, messages: [Chat], responseFormat: ResponseFormat? = nil, functions: [ChatFunctionDeclaration]? = nil, functionCall: FunctionCall? = nil, temperature: Double? = nil, topP: Double? = nil, n: Int? = nil, stop: [String]? = nil, maxTokens: Int? = nil, presencePenalty: Double? = nil, frequencyPenalty: Double? = nil, logitBias: [String : Int]? = nil, user: String? = nil, stream: Bool = false) {
+
+    public init(model: Model, messages: [Chat], responseFormat: ResponseFormat? = nil, functions: [ChatFunctionDeclaration]? = nil, functionCall: FunctionCall? = nil, temperature: Double? = nil, topP: Double? = nil, n: Int? = nil, stop: [String]? = nil, maxTokens: Int? = nil, presencePenalty: Double? = nil, frequencyPenalty: Double? = nil, logitBias: [String: Int]? = nil, user: String? = nil, stream: Bool = false) {
         self.model = model
         self.messages = messages
         self.functions = functions
