@@ -102,11 +102,12 @@ public struct Chat: Codable, Equatable {
         self.toolCallId = nil
     }
 
-    public init(toolCallId: String, toolCallContent: String, name: String? = nil) {
+    /// tools response content
+    public init(toolCallId: String, toolCallContent: String) {
         role = .tool
         content = toolCallContent
         self.toolCallId = toolCallId
-        self.name = name
+        name = nil
         parts = nil
         functionCall = nil
         toolCalls = nil
@@ -128,7 +129,7 @@ public struct Chat: Codable, Equatable {
            !toolCalls.isEmpty {
             try container.encode(toolCalls, forKey: .toolCalls)
         }
-        
+
         if let toolCallId = toolCallId {
             try container.encode(toolCallId, forKey: .toolCallId)
         }
@@ -373,7 +374,7 @@ public struct ChatQuery: Equatable, Codable, Streamable {
     //    none is the default when no functions are present. is the default if functions are present.auto
     public let toolChoice: FunctionCall?
     /// A list of functions the model may generate JSON inputs for.
-    
+
     @available(*, deprecated, renamed: "toolCalls", message: "toolCalls support concurrent call")
     public let functions: [ChatFunctionDeclaration]?
     /// Controls how the model responds to function calls. "none" means the model does not call a function, and responds to the end-user. "auto" means the model can pick between and end-user or calling a function. Specifying a particular function via `{"name": "my_function"}` forces the model to call that function. "none" is the default when no functions are present. "auto" is the default if functions are present.
@@ -446,7 +447,7 @@ public struct ChatQuery: Equatable, Codable, Streamable {
         case toolChoice = "tool_choice"
     }
 
-    public init(model: Model, messages: [Chat], responseFormat: ResponseFormat? = nil, functions: [ChatFunctionDeclaration]? = nil, functionCall: FunctionCall? = nil, temperature: Double? = nil, topP: Double? = nil, n: Int? = nil, stop: [String]? = nil, maxTokens: Int? = nil, presencePenalty: Double? = nil, frequencyPenalty: Double? = nil, logitBias: [String: Int]? = nil, user: String? = nil, stream: Bool = false, tools: [ChatTools]? = nil,toolChoice:FunctionCall? = nil) {
+    public init(model: Model, messages: [Chat], responseFormat: ResponseFormat? = nil, functions: [ChatFunctionDeclaration]? = nil, functionCall: FunctionCall? = nil, temperature: Double? = nil, topP: Double? = nil, n: Int? = nil, stop: [String]? = nil, maxTokens: Int? = nil, presencePenalty: Double? = nil, frequencyPenalty: Double? = nil, logitBias: [String: Int]? = nil, user: String? = nil, stream: Bool = false, tools: [ChatTools]? = nil, toolChoice: FunctionCall? = nil) {
         self.model = model
         self.messages = messages
         self.functions = functions
