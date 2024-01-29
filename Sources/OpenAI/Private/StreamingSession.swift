@@ -29,15 +29,20 @@ final class StreamingSession<ResultType: Codable>: NSObject, Identifiable, URLSe
 
     private var previousChunkBuffer = ""
     private let sessionConfiguration: URLSessionConfiguration?
+    private var task: URLSessionDataTask?
     init(urlRequest: URLRequest, configuration: URLSessionConfiguration? = nil) {
-        self.sessionConfiguration = configuration
+        sessionConfiguration = configuration
         self.urlRequest = urlRequest
     }
 
     func perform() {
-        urlSession
-            .dataTask(with: urlRequest)
-            .resume()
+        let task: URLSessionDataTask = urlSession.dataTask(with: urlRequest)
+        task.resume()
+        self.task = task
+    }
+
+    func cancel() {
+        task?.cancel()
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {

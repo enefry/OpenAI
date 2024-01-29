@@ -5,6 +5,7 @@
 //  Created by Maxime Maheo on 10/02/2023.
 //
 
+import Combine
 import Foundation
 
 @available(iOS 13.0, *)
@@ -26,15 +27,23 @@ public extension OpenAIProtocol {
             }
         }
     }
-    
+
     func completionsStream(
         query: CompletionsQuery
     ) -> AsyncThrowingStream<CompletionsResult, Error> {
         return AsyncThrowingStream { continuation in
-            return completionsStream(query: query) { result in
+            let anyCancellable = completionsStream(query: query) { result in
                 continuation.yield(with: result)
             } completion: { error in
                 continuation.finish(throwing: error)
+            }
+            continuation.onTermination = { t in
+                switch t {
+                case .cancelled:
+                    anyCancellable.cancel()
+                default:
+                    break
+                }
             }
         }
     }
@@ -53,7 +62,7 @@ public extension OpenAIProtocol {
             }
         }
     }
-    
+
     func imageEdits(
         query: ImageEditsQuery
     ) async throws -> ImagesResult {
@@ -68,7 +77,7 @@ public extension OpenAIProtocol {
             }
         }
     }
-    
+
     func imageVariations(
         query: ImageVariationsQuery
     ) async throws -> ImagesResult {
@@ -98,7 +107,7 @@ public extension OpenAIProtocol {
             }
         }
     }
-    
+
     func chats(
         query: ChatQuery
     ) async throws -> ChatResult {
@@ -113,19 +122,19 @@ public extension OpenAIProtocol {
             }
         }
     }
-    
+
     func chatsStream(
         query: ChatQuery
     ) -> AsyncThrowingStream<ChatStreamResult, Error> {
         return AsyncThrowingStream { continuation in
-            return chatsStream(query: query)  { result in
+            chatsStream(query: query) { result in
                 continuation.yield(with: result)
             } completion: { error in
                 continuation.finish(throwing: error)
             }
         }
     }
-    
+
     func edits(
         query: EditsQuery
     ) async throws -> EditsResult {
@@ -140,7 +149,7 @@ public extension OpenAIProtocol {
             }
         }
     }
-    
+
     func model(
         query: ModelQuery
     ) async throws -> ModelResult {
@@ -155,10 +164,10 @@ public extension OpenAIProtocol {
             }
         }
     }
-    
+
     func models() async throws -> ModelsResult {
         try await withCheckedThrowingContinuation { continuation in
-            models() { result in
+            models { result in
                 switch result {
                 case let .success(success):
                     return continuation.resume(returning: success)
@@ -168,7 +177,7 @@ public extension OpenAIProtocol {
             }
         }
     }
-    
+
     func moderations(
         query: ModerationsQuery
     ) async throws -> ModerationsResult {
@@ -183,7 +192,7 @@ public extension OpenAIProtocol {
             }
         }
     }
-    
+
     func audioCreateSpeech(
         query: AudioSpeechQuery
     ) async throws -> AudioSpeechResult {
@@ -198,7 +207,7 @@ public extension OpenAIProtocol {
             }
         }
     }
-    
+
     func audioTranscriptions(
         query: AudioTranscriptionQuery
     ) async throws -> AudioTranscriptionResult {
@@ -213,7 +222,7 @@ public extension OpenAIProtocol {
             }
         }
     }
-    
+
     func audioTranslations(
         query: AudioTranslationQuery
     ) async throws -> AudioTranslationResult {
