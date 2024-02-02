@@ -71,6 +71,9 @@ extension StreamingSession {
             return
         }
         jsonObjects.enumerated().forEach { index, jsonContent in
+            if jsonContent.isEmpty {
+                return
+            }
             guard jsonContent != streamingCompletionMarker else {
                 return
             }
